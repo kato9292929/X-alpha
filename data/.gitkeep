@@ -1,0 +1,3 @@
+# Append-only record files (bookmarks-raw, claims-history, scores-history,
+# reputation-history, divergence-history) are written here at runtime.
+# Fixtures for offline dry-runs live in data/fixtures/.

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.log
+.env
+.env.local
+# Ephemeral scratch: raw tweet bodies must never be committed.
+# Bodies are held in memory during extraction only; if a dev dumps them
+# for debugging, put them here so they can never reach git.
+tmp/
+scratch/
+*.raw.json
+*.bodies.jsonl

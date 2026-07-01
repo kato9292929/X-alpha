@@ -1,0 +1,43 @@
+# Phase 4: read osd's public portfolio API (read-only) and compute ticker-level
+# divergences against the X-alpha claims. Appends a snapshot (append-only) and
+# writes data/divergence-latest.json. osd is never modified.
+name: divergence
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * *' # daily, after scoring
+
+permissions:
+  contents: write
+
+concurrency:
+  group: x-alpha-append
+  cancel-in-progress: false
+
+jobs:
+  divergence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Build divergence view
+        env:
+          OSD_US_PORTFOLIO_URL: ${{ vars.OSD_US_PORTFOLIO_URL }}
+          OSD_JP_PORTFOLIO_URL: ${{ vars.OSD_JP_PORTFOLIO_URL }}
+        run: npm run divergence
+      - name: Commit divergence snapshot + latest view
+        run: |
+          git config user.name "x-alpha-bot"
+          git config user.email "bot@users.noreply.github.com"
+          if ! git diff --quiet -- data/; then
+            git add data/divergence-history.jsonl data/divergence-latest.json
+            git commit -m "chore(divergence): append snapshot and refresh latest view"
+            git push
+          else
+            echo "no divergence change"
+          fi
