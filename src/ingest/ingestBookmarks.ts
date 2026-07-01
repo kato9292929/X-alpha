@@ -9,6 +9,7 @@ import { fetchBookmarks } from './xClient.js';
 import { appendNew } from '../lib/jsonl.js';
 import { log } from '../lib/log.js';
 import { xConfig } from '../config/env.js';
+import { isMain } from '../lib/isMain.js';
 import type { BookmarkRaw } from '../extract/schema.js';
 
 const RAW_PATH = 'data/bookmarks-raw.jsonl';
@@ -42,7 +43,9 @@ async function main(): Promise<void> {
   // Note: bodies were held only in memory and are now discarded.
 }
 
-main().catch((err) => {
-  log('ingest', 'error: ' + (err as Error).message);
-  process.exitCode = 1;
-});
+if (isMain(import.meta.url)) {
+  main().catch((err) => {
+    log('ingest', 'error: ' + (err as Error).message);
+    process.exitCode = 1;
+  });
+}

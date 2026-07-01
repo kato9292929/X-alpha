@@ -15,6 +15,7 @@ import { evaluateFalsifiability } from './falsifiability.js';
 import { appendNew, existingKeys } from '../lib/jsonl.js';
 import { log } from '../lib/log.js';
 import { xConfig, anthropicConfig } from '../config/env.js';
+import { isMain } from '../lib/isMain.js';
 import type { ClaimRecord } from './schema.js';
 
 const CLAIMS_PATH = 'data/claims-history.jsonl';
@@ -60,7 +61,9 @@ async function main(): Promise<void> {
   log('pipeline', 'done', { new: newRecords.length, appended, skipped, scorable, path: CLAIMS_PATH });
 }
 
-main().catch((err) => {
-  log('pipeline', 'error: ' + (err as Error).message);
-  process.exitCode = 1;
-});
+if (isMain(import.meta.url)) {
+  main().catch((err) => {
+    log('pipeline', 'error: ' + (err as Error).message);
+    process.exitCode = 1;
+  });
+}

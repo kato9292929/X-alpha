@@ -12,6 +12,7 @@ import { readJsonl } from '../lib/jsonl.js';
 import { loadOsdHoldings } from './osdClient.js';
 import { findDivergences } from './divergence.js';
 import { log } from '../lib/log.js';
+import { isMain } from '../lib/isMain.js';
 import type { ClaimRecord } from '../extract/schema.js';
 import type { ScoreRecord } from '../score/reputation.js';
 
@@ -41,7 +42,9 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((err) => {
-  log('divergence', 'error: ' + (err as Error).message);
-  process.exitCode = 1;
-});
+if (isMain(import.meta.url)) {
+  main().catch((err) => {
+    log('divergence', 'error: ' + (err as Error).message);
+    process.exitCode = 1;
+  });
+}

@@ -15,6 +15,7 @@ import { classify, resolveJudgmentDate, scoreDirectional, scoreRelative, benchma
 import { aggregateReputation, type ScoreRecord } from './reputation.js';
 import { priceConfig } from '../config/env.js';
 import { log } from '../lib/log.js';
+import { isMain } from '../lib/isMain.js';
 import type { ClaimRecord } from '../extract/schema.js';
 
 const CLAIMS_PATH = 'data/claims-history.jsonl';
@@ -115,7 +116,9 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((err) => {
-  log('score', 'error: ' + (err as Error).message);
-  process.exitCode = 1;
-});
+if (isMain(import.meta.url)) {
+  main().catch((err) => {
+    log('score', 'error: ' + (err as Error).message);
+    process.exitCode = 1;
+  });
+}
