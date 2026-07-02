@@ -1,0 +1,7 @@
+{
+  "holdings": [
+    { "ticker": "NVDA", "weight": 0.2 },
+    { "ticker": "TSLA", "weight": 0.15 },
+    { "ticker": "MSFT", "weight": 0.1 }
+  ]
+}

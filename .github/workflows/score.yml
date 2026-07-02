@@ -1,0 +1,46 @@
+# Phase 3: score claims whose judgment date has passed, using primary price
+# data, and append scores + a reputation snapshot (append-only). Complex
+# fundamental conditions are left as review_pending, never auto hit/miss.
+#
+# Uses the free stooq price source by default (no key). Set X_ALPHA_PRICE_SOURCE
+# to switch adapters.
+name: score
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 6 * * *' # daily, after most markets have closed
+
+permissions:
+  contents: write
+
+concurrency:
+  group: x-alpha-append
+  cancel-in-progress: false
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Score due claims (append-only)
+        env:
+          X_ALPHA_PRICE_SOURCE: ${{ vars.X_ALPHA_PRICE_SOURCE || 'stooq' }}
+          X_ALPHA_BAND: ${{ vars.X_ALPHA_BAND }}
+        run: npm run score
+      - name: Commit scores + reputation
+        run: |
+          git config user.name "x-alpha-bot"
+          git config user.email "bot@users.noreply.github.com"
+          if ! git diff --quiet -- data/; then
+            git add data/scores-history.jsonl data/reputation-history.jsonl
+            git commit -m "chore(score): append scores and reputation snapshot"
+            git push
+          else
+            echo "nothing new to score"
+          fi

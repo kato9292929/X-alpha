@@ -1,0 +1,6 @@
+{
+  "holdings": [
+    { "ticker": "7203.T", "weight": 0.25 },
+    { "ticker": "6758.T", "weight": 0.12 }
+  ]
+}

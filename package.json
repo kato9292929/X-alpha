@@ -1,0 +1,23 @@
+{
+  "name": "x-alpha",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "X (Twitter) alpha claims -> dated falsifiable records -> primary-data scoring -> divergence vs Claude Portfolio (osd). Append-only reputation layer.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "ingest": "node --import tsx src/ingest/ingestBookmarks.ts",
+    "pipeline": "node --import tsx src/extract/runPipeline.ts",
+    "score": "node --import tsx src/score/scoreClaims.ts",
+    "divergence": "node --import tsx src/divergence/buildDivergence.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
