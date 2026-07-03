@@ -66,9 +66,39 @@ osd 保有はロング。X 主張が同一 ticker に対して弱気（`down/sho
 | `X_ALPHA_PRICE_SOURCE` | 3 | `stooq`(既定) / `fixture` |
 | `OSD_US_PORTFOLIO_URL`, `OSD_JP_PORTFOLIO_URL` | 4 | osd 公開 API（既定値あり） |
 
-### OAuth2 の認可について
+### OAuth2 の認可（X_REFRESH_TOKEN の取得）
 
-ユーザー同意フロー（PKCE authorization-code）は **CI/エージェント環境では完結できない**。ローカルで一度だけ同意を通し、得た refresh token を `X_REFRESH_TOKEN` に入れる。以降は本ツールが access token を自動更新する。
+ユーザー同意フロー（PKCE authorization-code）は **CI/エージェント環境では完結できない**。付属スクリプト `npm run auth`（`scripts/getRefreshToken.ts`）を **自分のローカル PC で一度だけ** 実行し、得た refresh token を secret に入れる。以降は本ツールが access token を自動更新する。
+
+スコープは `bookmark.read tweet.read users.read offline.access`（`offline.access` があることで X が refresh token を返す）。
+
+**手順:**
+
+1. **X 開発者ポータルでアプリを用意**
+   - User authentication settings を有効化し、**Type of App = Native App（public client）** または Web App（confidential client）を選ぶ。
+   - **App permissions = Read**。
+   - **Callback URI / Redirect URL** に `http://127.0.0.1:8723/callback` を**そのまま**登録する（`X_REDIRECT_URI` を変える場合は同じ値を登録）。
+   - Client ID（confidential なら Client Secret も）を控える。
+
+2. **ローカルで環境変数を設定して実行**（この環境ではなく手元の PC で）
+   ```bash
+   npm install
+   export X_CLIENT_ID=あなたのClientID
+   # confidential app の場合のみ:
+   # export X_CLIENT_SECRET=あなたのClientSecret
+   npm run auth
+   ```
+
+3. **ブラウザで認可**
+   - ターミナルに表示された URL を開き、アプリを承認する。
+   - スクリプトが `http://127.0.0.1:8723/callback` で認可コードを受け取り、自動でトークン交換する。
+
+4. **出力をコピー**
+   - `X_REFRESH_TOKEN=...` と `X_USER_ID=...`（`users.read` により自動解決）が表示される。
+   - これらを GitHub Actions の secret（`X_REFRESH_TOKEN`, `X_USER_ID`。confidential なら `X_CLIENT_SECRET` も）と、`X_CLIENT_ID` に設定する。
+   - access token は自動更新されるため保存不要。
+
+> 注意: リダイレクト URI はポータル登録値と `X_REDIRECT_URI` が**完全一致**している必要がある。ポート 8723 が使えない場合は `X_REDIRECT_URI` を変更し、同じ値をポータルにも登録すること。この環境（クラウド側）は `api.x.com` へ到達できないため、`npm run auth` は必ず手元の PC で実行する。
 
 ## 開発・検証
 
