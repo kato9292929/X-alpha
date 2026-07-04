@@ -4,6 +4,12 @@
 #
 # Requires repo secrets: X_CLIENT_ID, X_USER_ID, X_REFRESH_TOKEN
 # (optional X_CLIENT_SECRET, X_ACCESS_TOKEN), ANTHROPIC_API_KEY.
+#
+# X refresh tokens ROTATE: each run gets a new refresh token and the old one is
+# invalidated. This workflow writes the rotated value back to the
+# X_REFRESH_TOKEN secret via `gh secret set`, which needs a PAT with
+# "Actions secrets: write" stored as the GH_PAT_FOR_SECRET secret. Without it,
+# the run fails loudly so the stale-token problem is visible rather than silent.
 name: pipeline
 
 on:
@@ -49,3 +55,22 @@ jobs:
           else
             echo "no new claims"
           fi
+      # Runs even if earlier steps failed: a refresh token may have rotated
+      # before the failure, and that new value MUST be saved or the next run
+      # fails. The value is passed via stdin (never on the command line / logs).
+      - name: Write back rotated X refresh token to secret
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_FOR_SECRET }}
+        run: |
+          if [ ! -f .rotated-refresh-token ]; then
+            echo "no refresh-token rotation this run"
+            exit 0
+          fi
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::X refresh token rotated but GH_PAT_FOR_SECRET is not set. The new token cannot be saved, so the next run will fail with an invalid_token error. Add a PAT with 'Actions secrets: write' as the GH_PAT_FOR_SECRET secret."
+            exit 1
+          fi
+          gh secret set X_REFRESH_TOKEN --repo "$GITHUB_REPOSITORY" < .rotated-refresh-token
+          rm -f .rotated-refresh-token
+          echo "X_REFRESH_TOKEN secret updated with the rotated value"
