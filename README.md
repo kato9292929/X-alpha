@@ -61,14 +61,62 @@ osd 保有はロング。X 主張が同一 ticker に対して弱気（`down/sho
 |---|---|---|
 | `X_CLIENT_ID` (+ `X_CLIENT_SECRET`) | 1 | X アプリ資格情報 |
 | `X_USER_ID` | 1 | `GET /2/users/:id/bookmarks` の対象ユーザー |
-| `X_REFRESH_TOKEN`（または `X_ACCESS_TOKEN`） | 1 | OAuth2 PKCE ユーザートークン |
+| `X_REFRESH_TOKEN`（または `X_ACCESS_TOKEN`） | 1 | OAuth2 PKCE ユーザートークン（ローテートする→自動書き戻し） |
+| `GH_PAT_FOR_SECRET` | 1 | ローテートした `X_REFRESH_TOKEN` を secret へ書き戻す PAT（Actions secrets: write） |
 | `ANTHROPIC_API_KEY`（+ `X_ALPHA_ANTHROPIC_MODEL`） | 2 | 主張抽出（既定モデル `claude-sonnet-5`） |
 | `X_ALPHA_PRICE_SOURCE` | 3 | `stooq`(既定) / `fixture` |
 | `OSD_US_PORTFOLIO_URL`, `OSD_JP_PORTFOLIO_URL` | 4 | osd 公開 API（既定値あり） |
 
-### OAuth2 の認可について
+### OAuth2 の認可（X_REFRESH_TOKEN の取得）
 
-ユーザー同意フロー（PKCE authorization-code）は **CI/エージェント環境では完結できない**。ローカルで一度だけ同意を通し、得た refresh token を `X_REFRESH_TOKEN` に入れる。以降は本ツールが access token を自動更新する。
+ユーザー同意フロー（PKCE authorization-code）は **CI/エージェント環境では完結できない**。付属スクリプト `npm run auth`（`scripts/getRefreshToken.ts`）を **自分のローカル PC で一度だけ** 実行し、得た refresh token を secret に入れる。以降は本ツールが access token を自動更新する。
+
+スコープは `bookmark.read tweet.read users.read offline.access`（`offline.access` があることで X が refresh token を返す）。
+
+**手順:**
+
+1. **X 開発者ポータルでアプリを用意**
+   - User authentication settings を有効化し、**Type of App = Native App（public client）** または Web App（confidential client）を選ぶ。
+   - **App permissions = Read**。
+   - **Callback URI / Redirect URL** に `http://127.0.0.1:8723/callback` を**そのまま**登録する（`X_REDIRECT_URI` を変える場合は同じ値を登録）。
+   - Client ID（confidential なら Client Secret も）を控える。
+
+2. **ローカルで環境変数を設定して実行**（この環境ではなく手元の PC で）
+   ```bash
+   npm install
+   export X_CLIENT_ID=あなたのClientID
+   # confidential app の場合のみ:
+   # export X_CLIENT_SECRET=あなたのClientSecret
+   npm run auth
+   ```
+
+3. **ブラウザで認可**
+   - ターミナルに表示された URL を開き、アプリを承認する。
+   - スクリプトが `http://127.0.0.1:8723/callback` で認可コードを受け取り、自動でトークン交換する。
+
+4. **出力をコピー**
+   - `X_REFRESH_TOKEN=...` と `X_USER_ID=...`（`users.read` により自動解決）が表示される。
+   - これらを GitHub Actions の secret（`X_REFRESH_TOKEN`, `X_USER_ID`。confidential なら `X_CLIENT_SECRET` も）と、`X_CLIENT_ID` に設定する。
+   - access token は自動更新されるため保存不要。
+
+> 注意: リダイレクト URI はポータル登録値と `X_REDIRECT_URI` が**完全一致**している必要がある。ポート 8723 が使えない場合は `X_REDIRECT_URI` を変更し、同じ値をポータルにも登録すること。この環境（クラウド側）は `api.x.com` へ到達できないため、`npm run auth` は必ず手元の PC で実行する。
+
+### refresh token のローテーション（重要）
+
+X の OAuth2 refresh token は**ローテートする**。1 回 refresh すると新しい refresh token が発行され、**古い値は即座に無効化**される。そのため、実行のたびに新しい値を GitHub Actions の secret `X_REFRESH_TOKEN` に**書き戻さないと**、次回以降は `token refresh failed 400: invalid_request / "Value passed for the token was invalid."` で失敗し続ける。
+
+本リポジトリの対応:
+
+- トークン更新は `src/ingest/xClient.ts` の `XTokenManager` に集約。refresh のたびにレスポンスの `refresh_token` を現在値と比較し、**値が変わったときだけ**最新値をローカルファイル `.rotated-refresh-token`（gitignore 済み）に書き出す（`src/lib/tokenStore.ts`）。ミッドラン 401 での再 refresh も**常に最新の refresh token**を使う。
+- `.github/workflows/pipeline.yml` の最終ステップ（`if: always()`）が、そのファイルがあれば `gh secret set X_REFRESH_TOKEN`（値は標準入力経由、ログ非表示）で secret を更新する。データ処理が途中で失敗しても、既に発生したローテーションは書き戻される。
+- **PAT が未設定でローテーションが起きた場合は、ジョブを明示的に失敗させる**（`::error::` ＋ exit 1）。黙って古い値のまま次回失効するのを防ぐ。
+
+#### Katomasa 側で必要な作業
+
+1. **secret 書き込み権限を持つ PAT を用意し、secret 名 `GH_PAT_FOR_SECRET` で登録**する。
+   - 推奨: **fine-grained PAT** / Repository access = `kato9292929/X-alpha` のみ / Repository permissions → **Secrets: Read and write**（＝ Actions secrets の書き込み最小権限）。
+   - 代替: classic PAT なら `repo` スコープ。
+2. **有効な refresh token を入れ直す（初期化）**。現在の `X_REFRESH_TOKEN` は既に失効している見込みのため、手元 PC で `npm run auth` を再実行し、出力された `X_REFRESH_TOKEN` を secret に上書き設定する。以降はローテーションが自動で書き戻される。
 
 ## 開発・検証
 
