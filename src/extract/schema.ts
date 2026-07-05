@@ -52,8 +52,8 @@ export interface ClaimRecord {
   unscored_reason: string | null;
 }
 
-/** Raw bookmark record persisted in Phase 1. Deliberately has NO body text. */
-export interface BookmarkRaw {
+/** Raw ingested tweet record persisted in Phase 1. Deliberately has NO body text. */
+export interface IngestedTweetRaw {
   source: 'x';
   tweet_id: string;
   author_handle: string;

@@ -13,30 +13,25 @@ function req(name: string): string | undefined {
   return v && v.length > 0 ? v : undefined;
 }
 
-/** Phase 1 config; returns the list of what is missing so callers can report it. */
+/**
+ * Phase 1 config. Ingestion reads a public X List's tweets via GET
+ * /2/lists/:id/tweets, which supports OAuth 2.0 App-Only (Bearer). No user
+ * consent, no refresh tokens, no rotation. Returns what is missing so callers
+ * can report it.
+ */
 export function xConfig(): {
-  clientId?: string;
-  clientSecret?: string;
-  userId?: string;
-  refreshToken?: string;
-  accessToken?: string;
+  bearerToken?: string;
+  listId?: string;
   missing: MissingEnv[];
 } {
-  const clientId = req('X_CLIENT_ID');
-  const clientSecret = req('X_CLIENT_SECRET');
-  const userId = req('X_USER_ID');
-  const refreshToken = req('X_REFRESH_TOKEN');
-  const accessToken = req('X_ACCESS_TOKEN');
+  const bearerToken = req('X_BEARER_TOKEN');
+  const listId = req('X_LIST_ID');
 
   const missing: MissingEnv[] = [];
-  if (!clientId) missing.push({ name: 'X_CLIENT_ID', why: 'X app client id (developer portal).' });
-  if (!userId) missing.push({ name: 'X_USER_ID', why: 'numeric user id for GET /2/users/:id/bookmarks.' });
-  if (!refreshToken && !accessToken)
-    missing.push({
-      name: 'X_REFRESH_TOKEN',
-      why: 'OAuth2 PKCE refresh token (bookmark.read scope). The consent step must be done once locally; CI cannot complete it.',
-    });
-  return { clientId, clientSecret, userId, refreshToken, accessToken, missing };
+  if (!bearerToken)
+    missing.push({ name: 'X_BEARER_TOKEN', why: 'X App-Only Bearer token (Developer Console > Keys and Tokens). No scope/consent needed.' });
+  if (!listId) missing.push({ name: 'X_LIST_ID', why: 'numeric id of the public X List to ingest (the number at the end of the list URL).' });
+  return { bearerToken, listId, missing };
 }
 
 /** Phase 2 config. */

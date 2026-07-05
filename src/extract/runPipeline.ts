@@ -1,6 +1,6 @@
 /**
  * Phase 2 entrypoint. The falsifiable-record pipeline:
- *   fetch bookmarks (body in memory) -> Claude extraction -> falsifiability
+ *   fetch list tweets (body in memory) -> Claude extraction -> falsifiability
  *   filter -> append to claims-history.jsonl (append-only, dedup by tweet_id).
  *
  * The raw tweet body is NEVER persisted: it lives only in the loop variable and
@@ -9,10 +9,11 @@
  *
  * Run: npm run pipeline
  */
-import { fetchBookmarks } from '../ingest/xClient.js';
+import { fetchListTweets } from '../ingest/xClient.js';
+import { latestTweetId } from '../ingest/ingestListTweets.js';
 import { extractWithClaude } from './claudeClient.js';
 import { evaluateFalsifiability } from './falsifiability.js';
-import { appendNew, existingKeys } from '../lib/jsonl.js';
+import { appendNew, existingKeys, readJsonl } from '../lib/jsonl.js';
 import { log } from '../lib/log.js';
 import { xConfig, anthropicConfig } from '../config/env.js';
 import { isMain } from '../lib/isMain.js';
@@ -32,11 +33,13 @@ async function main(): Promise<void> {
   }
 
   // Dedup against what we already recorded, so we don't re-extract old tweets.
+  const existing = readJsonl<ClaimRecord>(CLAIMS_PATH);
   const seen = existingKeys<ClaimRecord>(CLAIMS_PATH, (r) => r.tweet_id);
+  const since = latestTweetId(existing);
   const capturedAt = new Date().toISOString();
   const newRecords: ClaimRecord[] = [];
 
-  for await (const b of fetchBookmarks()) {
+  for await (const b of fetchListTweets(since)) {
     if (seen.has(b.tweet_id)) continue;
     const out = await extractWithClaude({ tweet_id: b.tweet_id, author_handle: b.author_handle, body: b.body });
     // Re-derive scorable from the structure ourselves; do not trust the model's flag.

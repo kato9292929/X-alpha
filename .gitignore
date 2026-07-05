@@ -3,9 +3,6 @@ dist/
 *.log
 .env
 .env.local
-# Rotated X refresh token, written by the client for the workflow to push back
-# to the secret. Must never be committed.
-.rotated-refresh-token
 # Ephemeral scratch: raw tweet bodies must never be committed.
 # Bodies are held in memory during extraction only; if a dev dumps them
 # for debugging, put them here so they can never reach git.

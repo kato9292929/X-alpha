@@ -1,27 +1,24 @@
-# Phase 1+2: fetch bookmarks, extract structured claims with Claude, and append
-# them to data/claims-history.jsonl (append-only). Raw tweet bodies are never
-# written to disk or committed.
+# Phase 1+2: fetch the configured X List's tweets, extract structured claims with
+# Claude, and append them to data/claims-history.jsonl (append-only). Raw tweet
+# bodies are never written to disk or committed.
 #
-# Requires repo secrets: X_CLIENT_ID, X_USER_ID, X_REFRESH_TOKEN
-# (optional X_CLIENT_SECRET, X_ACCESS_TOKEN), ANTHROPIC_API_KEY.
-#
-# X refresh tokens ROTATE: each run gets a new refresh token and the old one is
-# invalidated. This workflow writes the rotated value back to the
-# X_REFRESH_TOKEN secret via `gh secret set`, which needs a PAT with
-# "Actions secrets: write" stored as the GH_PAT_FOR_SECRET secret. Without it,
-# the run fails loudly so the stale-token problem is visible rather than silent.
+# Ingestion uses OAuth 2.0 App-Only (Bearer): no user consent, no scopes, no
+# refresh-token rotation. Requires repo secrets: X_BEARER_TOKEN, X_LIST_ID,
+# ANTHROPIC_API_KEY.
 name: pipeline
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *' # every 6 hours
+    - cron: '0 6 * * *' # once a day
 
 permissions:
   contents: write
 
+# Bearer has no token race, but keep a lock so concurrent runs can't double-append
+# to the JSONL.
 concurrency:
-  group: x-alpha-append
+  group: x-alpha-pipeline
   cancel-in-progress: false
 
 jobs:
@@ -34,13 +31,10 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - name: Ingest + extract claims (append-only)
+      - name: Ingest list tweets + extract claims (append-only)
         env:
-          X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}
-          X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}
-          X_USER_ID: ${{ secrets.X_USER_ID }}
-          X_REFRESH_TOKEN: ${{ secrets.X_REFRESH_TOKEN }}
-          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          X_LIST_ID: ${{ secrets.X_LIST_ID }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           X_ALPHA_ANTHROPIC_MODEL: ${{ vars.X_ALPHA_ANTHROPIC_MODEL }}
         run: npm run pipeline
@@ -55,22 +49,3 @@ jobs:
           else
             echo "no new claims"
           fi
-      # Runs even if earlier steps failed: a refresh token may have rotated
-      # before the failure, and that new value MUST be saved or the next run
-      # fails. The value is passed via stdin (never on the command line / logs).
-      - name: Write back rotated X refresh token to secret
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT_FOR_SECRET }}
-        run: |
-          if [ ! -f .rotated-refresh-token ]; then
-            echo "no refresh-token rotation this run"
-            exit 0
-          fi
-          if [ -z "$GH_TOKEN" ]; then
-            echo "::error::X refresh token rotated but GH_PAT_FOR_SECRET is not set. The new token cannot be saved, so the next run will fail with an invalid_token error. Add a PAT with 'Actions secrets: write' as the GH_PAT_FOR_SECRET secret."
-            exit 1
-          fi
-          gh secret set X_REFRESH_TOKEN --repo "$GITHUB_REPOSITORY" < .rotated-refresh-token
-          rm -f .rotated-refresh-token
-          echo "X_REFRESH_TOKEN secret updated with the rotated value"
