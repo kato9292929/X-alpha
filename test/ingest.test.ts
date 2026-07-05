@@ -99,6 +99,28 @@ test('(c) missing X_BEARER_TOKEN throws a clear error', async () => {
   }
 });
 
+test('(page cap) stops after maxPages without error even if next_token never ends', async () => {
+  let calls = 0;
+  // A page source that ALWAYS returns another next_token — without a cap this
+  // would page forever (the bug that burned ~600 reads on the first live run).
+  const infinite = async (): Promise<any> => {
+    calls++;
+    const base = 2000 - calls * 10;
+    return {
+      data: [
+        { id: String(base + 1), author_id: 'a1', created_at: '2026-07-05T00:00:00Z', text: 't' },
+        { id: String(base), author_id: 'a1', created_at: '2026-07-05T00:00:00Z', text: 't' },
+      ],
+      includes: { users: [{ id: 'a1', username: 'alice' }] },
+      meta: { next_token: 'more' },
+    };
+  };
+  const ids: string[] = [];
+  for await (const t of fetchListTweets(undefined, infinite, { maxPages: 2 })) ids.push(t.tweet_id);
+  assert.equal(calls, 2, 'must not fetch beyond the page cap');
+  assert.equal(ids.length, 4, '2 pages x 2 tweets, then a clean stop');
+});
+
 test('latestTweetId returns the numeric max, or undefined when empty', () => {
   assert.equal(latestTweetId([{ tweet_id: '1001' }, { tweet_id: '1005' }, { tweet_id: '1003' }]), '1005');
   assert.equal(latestTweetId([]), undefined);

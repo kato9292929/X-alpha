@@ -14,7 +14,7 @@ import { latestTweetId } from '../ingest/ingestListTweets.js';
 import { extractWithClaude } from './claudeClient.js';
 import { evaluateFalsifiability } from './falsifiability.js';
 import { appendNew, existingKeys, readJsonl } from '../lib/jsonl.js';
-import { log } from '../lib/log.js';
+import { log, progress } from '../lib/log.js';
 import { xConfig, anthropicConfig } from '../config/env.js';
 import { isMain } from '../lib/isMain.js';
 import type { ClaimRecord } from './schema.js';
@@ -39,8 +39,11 @@ async function main(): Promise<void> {
   const capturedAt = new Date().toISOString();
   const newRecords: ClaimRecord[] = [];
 
+  let processed = 0;
   for await (const b of fetchListTweets(since)) {
     if (seen.has(b.tweet_id)) continue;
+    processed++;
+    progress('pipeline', `extracting #${processed} tweet ${b.tweet_id} (@${b.author_handle})`);
     const out = await extractWithClaude({ tweet_id: b.tweet_id, author_handle: b.author_handle, body: b.body });
     // Re-derive scorable from the structure ourselves; do not trust the model's flag.
     const f = evaluateFalsifiability(out.claim);

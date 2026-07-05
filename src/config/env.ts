@@ -34,6 +34,16 @@ export function xConfig(): {
   return { bearerToken, listId, missing };
 }
 
+/**
+ * Phase 1 ingest limits. A single run reads at most maxPagesPerRun pages
+ * (100 tweets each). This bounds reads/time on the first run when there is no
+ * since-cutoff yet; later runs pick up the rest via the since-cutoff.
+ */
+export function ingestConfig(): { maxPagesPerRun: number } {
+  const p = Number(process.env.X_MAX_PAGES_PER_RUN);
+  return { maxPagesPerRun: Number.isFinite(p) && p > 0 ? Math.floor(p) : 3 };
+}
+
 /** Phase 2 config. */
 export function anthropicConfig(): { apiKey?: string; model: string; missing: MissingEnv[] } {
   const apiKey = req('ANTHROPIC_API_KEY');

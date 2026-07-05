@@ -61,6 +61,7 @@ osd 保有はロング。X 主張が同一 ticker に対して弱気（`down/sho
 |---|---|---|
 | `X_BEARER_TOKEN` | 1 | X App-Only Bearer token（Developer Console > Keys and Tokens）。スコープ・認可不要、失効・ローテートなし |
 | `X_LIST_ID` | 1 | 取り込む公開 X リストの数値 id（リスト URL 末尾の数字） |
+| `X_MAX_PAGES_PER_RUN` | 1 | 1 実行あたりの最大ページ数（1 ページ=100件、既定 3=最大300件） |
 | `ANTHROPIC_API_KEY`（+ `X_ALPHA_ANTHROPIC_MODEL`） | 2 | 主張抽出（既定モデル `claude-sonnet-5`） |
 | `X_ALPHA_PRICE_SOURCE` | 3 | `stooq`(既定) / `fixture` |
 | `OSD_US_PORTFOLIO_URL`, `OSD_JP_PORTFOLIO_URL` | 4 | osd 公開 API（既定値あり） |
@@ -70,7 +71,11 @@ osd 保有はロング。X 主張が同一 ticker に対して弱気（`down/sho
 `GET /2/lists/:id/tweets` は OAuth 2.0 App-Only（Bearer）対応で、**スコープ・ユーザー認可フロー・refresh token ローテーションが一切不要**。Rate limit は Per App 900/15min で、1 日 1 回の取り込みには十分。
 
 - 認証はヘッダー `Authorization: Bearer ${X_BEARER_TOKEN}` のみ（`src/ingest/xClient.ts`）。
-- ページングは `meta.next_token` を辿るが、**保存済み JSONL の最新 tweet_id 以下に達した時点で打ち切る**（リストは新しい順に返るため。重複保存の防止と、pay-per-use 時の read 数節約を兼ねる）。
+- ページングは `meta.next_token` を辿るが、次のいずれかで**打ち切る**（どちらもエラーでなく正常終了）：
+  - **保存済み JSONL の最新 tweet_id 以下に達したとき**（since 打ち切り。リストは新しい順に返るため。重複保存の防止と read 数節約を兼ねる）、
+  - **1 実行あたりの最大ページ数（`X_MAX_PAGES_PER_RUN`、既定 3）に達したとき**。初回で since 打ち切りが効かないときに全量を遡らないためのガード。残りは翌日以降の実行が since 打ち切りで差分として拾う。
+- 各リクエストに **30 秒のタイムアウト**（無限待ち禁止。タイムアウト時はステータス不明としてエラー終了）。
+- **進捗ログ**を stdout に出す：取り込みは 1 ページごとに「ページ n／取得 m 件／最古 tweet_id と日時」、抽出段は 1 件ごとに処理件数。長時間無言にならない。
 - 保存フィールドは tweet_id / author(username) / created_at / captured_at のみ。**ツイート原文はディスクに残さない**（抽出への受け渡しはメモリ内）。
 
 ### ライブ検証手順（Katomasa が実施）
