@@ -37,10 +37,14 @@ jobs:
         run: |
           git config user.name "x-alpha-bot"
           git config user.email "bot@users.noreply.github.com"
-          if ! git diff --quiet -- data/; then
-            git add data/scores-history.jsonl data/reputation-history.jsonl
+          # Stage first, then check the STAGED diff: `git diff --quiet` (unstaged)
+          # misses newly-created untracked files.
+          git add data/scores-history.jsonl data/reputation-history.jsonl
+          echo "porcelain status for data/:"
+          git status --porcelain data/
+          if git diff --cached --quiet; then
+            echo "nothing new to score"
+          else
             git commit -m "chore(score): append scores and reputation snapshot"
             git push
-          else
-            echo "nothing new to score"
           fi

@@ -34,10 +34,14 @@ jobs:
         run: |
           git config user.name "x-alpha-bot"
           git config user.email "bot@users.noreply.github.com"
-          if ! git diff --quiet -- data/; then
-            git add data/divergence-history.jsonl data/divergence-latest.json
+          # Stage first, then check the STAGED diff: `git diff --quiet` (unstaged)
+          # misses newly-created untracked files.
+          git add data/divergence-history.jsonl data/divergence-latest.json
+          echo "porcelain status for data/:"
+          git status --porcelain data/
+          if git diff --cached --quiet; then
+            echo "no divergence change"
+          else
             git commit -m "chore(divergence): append snapshot and refresh latest view"
             git push
-          else
-            echo "no divergence change"
           fi

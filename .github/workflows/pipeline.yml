@@ -42,10 +42,15 @@ jobs:
         run: |
           git config user.name "x-alpha-bot"
           git config user.email "bot@users.noreply.github.com"
-          if ! git diff --quiet -- data/; then
-            git add data/*.jsonl
+          # Stage the exact file the pipeline writes, THEN check for a staged
+          # change. `git diff --quiet` (unstaged) misses newly-created untracked
+          # files, which is why 299 appended claims were never committed.
+          git add data/claims-history.jsonl
+          echo "porcelain status for data/:"
+          git status --porcelain data/
+          if git diff --cached --quiet; then
+            echo "no new claims to commit"
+          else
             git commit -m "chore(pipeline): append new claims"
             git push
-          else
-            echo "no new claims"
           fi

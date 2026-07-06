@@ -17,9 +17,15 @@ import { appendNew, existingKeys, readJsonl } from '../lib/jsonl.js';
 import { log, progress } from '../lib/log.js';
 import { xConfig, anthropicConfig } from '../config/env.js';
 import { isMain } from '../lib/isMain.js';
+import { resolve } from 'node:path';
 import type { ClaimRecord } from './schema.js';
 
-const CLAIMS_PATH = 'data/claims-history.jsonl';
+/**
+ * Repo-root-relative path the pipeline appends to. The CI commit step MUST stage
+ * exactly this path (see test/commit-target.test.ts). Exported so that check can
+ * assert the two stay in sync.
+ */
+export const CLAIMS_PATH = 'data/claims-history.jsonl';
 
 async function main(): Promise<void> {
   const x = xConfig();
@@ -32,10 +38,15 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Log the exact write target (relative + absolute) so CI logs show where the
+  // records land, and that it is inside the repo working tree the commit stages.
+  log('pipeline', 'write target', { path: CLAIMS_PATH, absolute: resolve(CLAIMS_PATH) });
+
   // Dedup against what we already recorded, so we don't re-extract old tweets.
   const existing = readJsonl<ClaimRecord>(CLAIMS_PATH);
   const seen = existingKeys<ClaimRecord>(CLAIMS_PATH, (r) => r.tweet_id);
   const since = latestTweetId(existing);
+  log('pipeline', 'since-cutoff', { existing_records: existing.length, since: since ?? '(none: full first-run fetch)' });
   const capturedAt = new Date().toISOString();
   const newRecords: ClaimRecord[] = [];
 
@@ -64,7 +75,7 @@ async function main(): Promise<void> {
 
   const { appended, skipped } = appendNew(CLAIMS_PATH, newRecords, (r) => r.tweet_id);
   const scorable = newRecords.filter((r) => r.scorable).length;
-  log('pipeline', 'done', { new: newRecords.length, appended, skipped, scorable, path: CLAIMS_PATH });
+  log('pipeline', 'done', { new: newRecords.length, appended, skipped, scorable, path: CLAIMS_PATH, absolute: resolve(CLAIMS_PATH) });
 }
 
 if (isMain(import.meta.url)) {
