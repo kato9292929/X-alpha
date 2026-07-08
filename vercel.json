@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/**/*.ts": {
+      "includeFiles": "data/**"
+    }
+  },
+  "rewrites": [
+    { "source": "/claims", "destination": "/api/claims" },
+    { "source": "/claims/active", "destination": "/api/claims/active" }
+  ]
+}

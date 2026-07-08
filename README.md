@@ -90,6 +90,24 @@ osd 保有はロング。X 主張が同一 ticker に対して弱気（`down/sho
 
 > エラー時は原因を推測で断定せず、レスポンスの**ステータスコードとボディを丸ごと**ログに出す設計（`src/ingest/xClient.ts` の `defaultFetchPage`）。
 
+## x402 エンドポイント（Solana leg / §6実測402準拠）
+
+scorable 主張＋発信者実績を、AA が discover→402→pay→200 で消費できる x402 エンドポイントとして公開する。serve 先は **Vercel**（`api/` に serverless functions を追加、`data/*.jsonl` を同リポジトリから読む。パイプライン部分＝GitHub Actions は不変更）。理由：既存が Node/TS 構成で serverless 基盤が無く、最小追加で済むため。
+
+| パス | 課金 | 内容 |
+|---|---|---|
+| `GET /claims` | 無償 | discover 用メタ：アクティブ主張数・資産別件数・データ鮮度・発信者数・`_hint`（機械可読：`/claims/active`, 単価, payTo, network） |
+| `GET /claims/active` | x402 有償 | 402 は §6 実測形に準拠。支払い後に構造化主張＋`author_weight`＋`aggregate.by_asset` を返す |
+
+- **402 transport（§6）**：requirements は `PAYMENT-REQUIRED` ヘッダーに base64、ボディは `{}`（空402ではない）。
+- **accepts は静的自前構築**（facilitator の `getSupported` に非依存＝到達性非依存で常に非空。OSD 7/1 regression の回避）。**v1 leg（`network:"solana"`）＋ v2 leg（CAIP-2）を併記**（現行 AA は v2 のみだと弾くため）。
+- 各 leg：`scheme:"exact"`, `amount:"10000"`（atomic USDC 6桁）, `asset`(Solana USDC mint), `payTo`, `extra:{resource, feePayer}`。
+- **決済実行は自前化しない（§1）**：`PAYMENT-SIGNATURE` を PayAI facilitator に渡して verify→settle。成功時のみ 200、失敗でも 200 にせず `PAYMENT-RESPONSE` を必ず返す。
+- **原文非漏洩**：`claim.thesis`・原文とも返さない（構造化フィールドのみ）。
+- **author_weight**：`reputation.ts` 準拠（`hit_rate=(hits+0.5*partials)/分母`, `sample_size`, `confidence`）。判定データが無ければ **null**（捏造しない）。`scores-history.jsonl` 未コミットの現状は当面 **全件 null**、`data_note` にその旨を明示。
+
+設定は `.env.example` の `X402_*`（§6実測値を既定）。**`X402_FEE_PAYER`（PayAI）と `X402_FACILITATOR_URL` は安全な既定値が無く、ライブ pay→200 前に投入が必須**（未設定時は素通し200せず verify で失敗）。
+
 ## 開発・検証
 
 ```bash
