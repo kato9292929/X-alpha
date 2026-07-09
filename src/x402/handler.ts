@@ -9,6 +9,7 @@ import { x402Config, type X402Config } from './config.js';
 import { buildRequirements, encodeRequirementsHeader } from './accepts.js';
 import { buildActivePayload, buildClaimsMeta } from './data.js';
 import { verifyThenSettle, httpFacilitator, type Facilitator } from './payment.js';
+import { resolveFeePayer } from './feePayer.js';
 
 export interface HttpResult {
   status: number;
@@ -22,6 +23,8 @@ export interface Deps {
   loadScores: () => ScoreRecord[];
   now: () => string;
   facilitator: Facilitator;
+  /** Dynamic feePayer resolution (PayAI /supported → cache → fallback). */
+  resolveFeePayer: () => Promise<string>;
 }
 
 export function defaultDeps(loadClaims: () => ClaimRecord[], loadScores: () => ScoreRecord[]): Deps {
@@ -32,6 +35,7 @@ export function defaultDeps(loadClaims: () => ClaimRecord[], loadScores: () => S
     loadScores,
     now: () => new Date().toISOString(),
     facilitator: httpFacilitator(cfg.facilitatorUrl),
+    resolveFeePayer: () => resolveFeePayer(cfg),
   };
 }
 
@@ -60,7 +64,9 @@ export function handleClaims(deps: Deps, resource: string): HttpResult {
  * facilitator; 200 + payload only on success; PAYMENT-RESPONSE on both outcomes.
  */
 export async function handleActive(deps: Deps, resource: string, paymentSignature?: string): Promise<HttpResult> {
-  const requirements = buildRequirements(deps.cfg, resource);
+  // Only feePayer is dynamic; everything else is static from config.
+  const feePayer = await deps.resolveFeePayer();
+  const requirements = buildRequirements(deps.cfg, resource, feePayer);
 
   if (!paymentSignature) {
     return {

@@ -27,24 +27,28 @@ export interface Requirements {
   accepts: PaymentRequirement[];
 }
 
-function leg(cfg: X402Config, network: string, resource: string): PaymentRequirement {
+function leg(cfg: X402Config, network: string, resource: string, feePayer: string): PaymentRequirement {
   return {
     scheme: cfg.scheme,
     network,
     amount: cfg.amount,
     asset: cfg.asset,
     payTo: cfg.payTo,
-    extra: { resource, feePayer: cfg.feePayer },
+    extra: { resource, feePayer },
   };
 }
 
-/** v1 leg first (current AA), then v2 leg (future clients). Always length 2. */
-export function buildAccepts(cfg: X402Config, resource: string): PaymentRequirement[] {
-  return [leg(cfg, cfg.networkV1, resource), leg(cfg, cfg.networkV2, resource)];
+/**
+ * v1 leg first (current AA), then v2 leg (future clients). Always length 2 — a
+ * missing feePayer does NOT empty accepts. Only feePayer comes from outside
+ * (dynamic); everything else is static from config.
+ */
+export function buildAccepts(cfg: X402Config, resource: string, feePayer: string): PaymentRequirement[] {
+  return [leg(cfg, cfg.networkV1, resource, feePayer), leg(cfg, cfg.networkV2, resource, feePayer)];
 }
 
-export function buildRequirements(cfg: X402Config, resource: string): Requirements {
-  return { x402Version: 2, accepts: buildAccepts(cfg, resource) };
+export function buildRequirements(cfg: X402Config, resource: string, feePayer: string): Requirements {
+  return { x402Version: 2, accepts: buildAccepts(cfg, resource, feePayer) };
 }
 
 /** base64 of the requirements JSON, for the PAYMENT-REQUIRED header. */

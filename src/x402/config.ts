@@ -5,10 +5,14 @@
  *
  * NOTE (honest, unverified): these defaults are taken from the instruction's
  * §6 measurement. This sandbox cannot reach OSD /api/ipo, PayAI, or the AA repo,
- * so they are NOT independently verified here. feePayer has NO safe default (it
- * is PayAI's fee-payer address) — it must be supplied via env before a live
- * pay→200. registerExactSvmScheme's exact network string could not be confirmed
- * against the AA repo (out of session scope) and is treated as §6-authoritative.
+ * so they are NOT independently verified here. registerExactSvmScheme's exact
+ * network string could not be confirmed against the AA repo (out of session
+ * scope) and is treated as §6-authoritative.
+ *
+ * feePayer is NOT static (PayAI rotates it): it is fetched from PayAI /supported
+ * at request time with a short cache and a fallback (see feePayer.ts). The value
+ * here (X402_FEE_PAYER) is only the FALLBACK override used when /supported is
+ * unreachable.
  */
 export interface X402Config {
   scheme: 'exact';
@@ -22,10 +26,12 @@ export interface X402Config {
   asset: string;
   /** X-alpha receiving wallet. */
   payTo: string;
-  /** PayAI fee payer. Empty until provided (see note above). */
-  feePayer: string;
-  /** PayAI facilitator base URL for verify/settle. Empty disables live settle. */
+  /** FALLBACK PayAI fee payer (override) used only when /supported is unreachable. */
+  feePayerFallback: string;
+  /** PayAI facilitator base URL for /supported + verify/settle. Empty disables live calls. */
   facilitatorUrl: string;
+  /** How long a fetched feePayer is cached (ms). */
+  feePayerTtlMs: number;
   maxTimeoutSeconds: number;
 }
 
@@ -42,8 +48,9 @@ export function x402Config(): X402Config {
     amount: env('X402_AMOUNT', '10000'),
     asset: env('X402_ASSET', 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
     payTo: env('X402_PAY_TO', '4s8XQC2WzRfgH8Xiep7ybnCW11VKRCMwxQF6jknx3VPf'),
-    feePayer: env('X402_FEE_PAYER', ''),
+    feePayerFallback: env('X402_FEE_PAYER', ''),
     facilitatorUrl: env('X402_FACILITATOR_URL', ''),
+    feePayerTtlMs: Number(env('X402_FEE_PAYER_TTL_MS', '300000')),
     maxTimeoutSeconds: Number(env('X402_MAX_TIMEOUT_SECONDS', '60')),
   };
 }
