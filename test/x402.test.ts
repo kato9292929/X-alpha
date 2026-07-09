@@ -166,10 +166,10 @@ test('author_weight fills from scores (reputation.ts formula)', () => {
 
 test('(f) original text and thesis never appear in any response', async () => {
   const okFac: Facilitator = {
-    verify: async () => ({ valid: true }),
-    settle: async () => ({ success: true, txSignature: 'base58sig' }),
+    verify: async () => ({ isValid: true }),
+    settle: async () => ({ success: true, transaction: 'base58sig', network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' }),
   };
-  const paid = await handleActive(deps(CLAIMS, [], okFac), RESOURCE, 'SIG');
+  const paid = await handleActive(deps(CLAIMS, [], okFac), RESOURCE, sigV2());
   assert.equal(paid.status, 200);
   assert.doesNotMatch(paid.body, /SECRET-THESIS/);
   assert.doesNotMatch(paid.body, /thesis/);
@@ -179,10 +179,10 @@ test('(f) original text and thesis never appear in any response', async () => {
 
 test('(g) unverified PAYMENT-SIGNATURE never returns 200 (verify fails)', async () => {
   const rejectFac: Facilitator = {
-    verify: async () => ({ valid: false, reason: 'bad_sig' }),
+    verify: async () => ({ isValid: false, invalidReason: 'bad_sig' }),
     settle: async () => { throw new Error('settle must not run after verify fails'); },
   };
-  const res = await handleActive(deps(CLAIMS, [], rejectFac), RESOURCE, 'SIG');
+  const res = await handleActive(deps(CLAIMS, [], rejectFac), RESOURCE, sigV2());
   assert.notEqual(res.status, 200);
   assert.equal(res.status, 402);
   assert.ok(res.headers['PAYMENT-RESPONSE'], 'failure still returns PAYMENT-RESPONSE');
@@ -190,12 +190,78 @@ test('(g) unverified PAYMENT-SIGNATURE never returns 200 (verify fails)', async 
 
 test('(g2) verify ok but settle fails => still not 200', async () => {
   const fac: Facilitator = {
-    verify: async () => ({ valid: true }),
-    settle: async () => ({ success: false, reason: 'settle_revert' }),
+    verify: async () => ({ isValid: true }),
+    settle: async () => ({ success: false, errorReason: 'settle_revert' }),
   };
-  const res = await handleActive(deps(CLAIMS, [], fac), RESOURCE, 'SIG');
+  const res = await handleActive(deps(CLAIMS, [], fac), RESOURCE, sigV2());
   assert.notEqual(res.status, 200);
   assert.ok(res.headers['PAYMENT-RESPONSE']);
+});
+
+
+/** Valid v2 PAYMENT-SIGNATURE: base64 of { x402Version:2, accepted:{scheme,network}, payload:{} } matching our v2 leg. */
+function sigV2(network = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'): string {
+  return Buffer.from(JSON.stringify({
+    x402Version: 2,
+    accepted: { scheme: 'exact', network },
+    payload: { transaction: 'AA==' },
+  }), 'utf8').toString('base64');
+}
+
+test('(h) malformed PAYMENT-SIGNATURE => 402 with PAYMENT-RESPONSE, never throws/500s', async () => {
+  const res = await handleActive(deps(CLAIMS, [], NEVER_CALLED), RESOURCE, '!!!not-base64-json!!!');
+  assert.equal(res.status, 402);
+  assert.ok(res.headers['PAYMENT-RESPONSE']);
+  const pr = JSON.parse(Buffer.from(res.headers['PAYMENT-RESPONSE'] ?? '', 'base64').toString('utf8'));
+  assert.equal(pr.success, false);
+  assert.equal(pr.stage, 'decode');
+});
+
+test('(h2) facilitator throwing (e.g. PayAI non-JSON 4xx) => 402, never 500', async () => {
+  const throwing: Facilitator = {
+    verify: async () => { throw new Error('facilitator /verify 400: Bad Request'); },
+    settle: async () => { throw new Error('unreachable'); },
+  };
+  const res = await handleActive(deps(CLAIMS, [], throwing), RESOURCE, sigV2());
+  assert.equal(res.status, 402);
+  const pr = JSON.parse(Buffer.from(res.headers['PAYMENT-RESPONSE'] ?? '', 'base64').toString('utf8'));
+  assert.equal(pr.success, false);
+  assert.equal(pr.stage, 'verify');
+});
+
+test('(h3) facilitator receives the DECODED payload and the SINGLE matched v2 leg (core wire)', async () => {
+  let seenPayload: unknown, seenReq: unknown;
+  const spy: Facilitator = {
+    verify: async (p, r) => { seenPayload = p; seenReq = r; return { isValid: true }; },
+    settle: async () => ({ success: true, transaction: 'sig' }),
+  };
+  const res = await handleActive(deps(CLAIMS, [], spy), RESOURCE, sigV2());
+  assert.equal(res.status, 200);
+  assert.equal((seenPayload as any).x402Version, 2, 'payload is the decoded object, not a base64 string');
+  const leg = seenReq as any;
+  assert.equal(leg.network, 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', 'v2 leg matched');
+  assert.equal(leg.amount, '10000', 'server-built terms, not client-supplied');
+  assert.equal(leg.payTo, x402Config().payTo);
+  assert.ok(!('accepts' in leg), 'single leg, not the accepts envelope');
+});
+
+test('(h4) unknown accepted network => 402 no_matching_payment_requirements, facilitator never called', async () => {
+  const res = await handleActive(deps(CLAIMS, [], NEVER_CALLED), RESOURCE, sigV2('eip155:8453'));
+  assert.equal(res.status, 402);
+  const pr = JSON.parse(Buffer.from(res.headers['PAYMENT-RESPONSE'] ?? '', 'base64').toString('utf8'));
+  assert.equal(pr.errorReason, 'no_matching_payment_requirements');
+});
+
+test('(h5) success PAYMENT-RESPONSE carries facilitator transaction (core SettleResponse shape)', async () => {
+  const fac: Facilitator = {
+    verify: async () => ({ isValid: true }),
+    settle: async () => ({ success: true, transaction: 'base58txsig', network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' }),
+  };
+  const res = await handleActive(deps(CLAIMS, [], fac), RESOURCE, sigV2());
+  assert.equal(res.status, 200);
+  const pr = JSON.parse(Buffer.from(res.headers['PAYMENT-RESPONSE'] ?? '', 'base64').toString('utf8'));
+  assert.equal(pr.success, true);
+  assert.equal(pr.transaction, 'base58txsig');
 });
 
 function scoreRec(handle: string, verdict: ScoreRecord['verdict']): ScoreRecord {
