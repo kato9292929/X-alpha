@@ -96,9 +96,13 @@ test('(b) 402 form matches §6: non-empty accepts, v1 leg, CAIP-2, atomic amount
   const [v1, v2] = reqs.accepts;
   assert.equal(v1.network, 'solana', 'v1 leg present (current AA needs it)');
   assert.equal(v2.network, 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', 'v2 CAIP-2');
+  // Amount FIELD NAME differs by version (value identical "10000").
+  assert.equal(v1.maxAmountRequired, '10000', 'v1 leg uses maxAmountRequired (canonical x402@1.2.0)');
+  assert.equal(v1.amount, undefined, 'v1 leg must NOT carry amount');
+  assert.equal(v2.amount, '10000', 'v2 leg uses amount top-level (§6)');
+  assert.equal(v2.maxAmountRequired, undefined, 'v2 leg must NOT carry maxAmountRequired');
   for (const leg of reqs.accepts) {
     assert.equal(leg.scheme, 'exact');
-    assert.equal(leg.amount, '10000'); // atomic units string, not "0.01"
     assert.equal(leg.asset, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
     assert.equal(leg.payTo, '4s8XQC2WzRfgH8Xiep7ybnCW11VKRCMwxQF6jknx3VPf');
     assert.equal(leg.extra.feePayer, TEST_FEE_PAYER); // resolved dynamically, then injected
