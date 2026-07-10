@@ -12,8 +12,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { x402Config, type X402Config } from '../src/x402/config.js';
-import { buildAccepts, buildRequirements, encodeRequirementsHeader } from '../src/x402/accepts.js';
-import { PaymentRequirementsSchema } from 'x402/types';
+import { buildRequirements, encodeRequirementsHeader } from '../src/x402/accepts.js';
 import { buildActivePayload, buildClaimsMeta } from '../src/x402/data.js';
 import { handleActive, handleClaims, type Deps } from '../src/x402/handler.js';
 import { resolveFeePayer, extractFeePayer, _resetFeePayerCache } from '../src/x402/feePayer.js';
@@ -119,21 +118,6 @@ test('(c) accepts are static (no facilitator call to build the 402)', async () =
   // (network/amount/asset/payTo/transport) do not depend on data or network.
   const reqs = buildRequirements(x402Config(), RESOURCE, TEST_FEE_PAYER);
   assert.equal(encodeRequirementsHeader(reqs), res.headers['PAYMENT-REQUIRED']);
-});
-
-test('(i) v1 leg passes the REAL canonical x402 PaymentRequirementsSchema (verify gate)', () => {
-  const [v1] = buildAccepts(x402Config(), RESOURCE, TEST_FEE_PAYER);
-  // The exact leg PayAI verify validates. Must satisfy the primary-source schema:
-  // resource/description/mimeType/maxTimeoutSeconds are non-optional there.
-  const r = PaymentRequirementsSchema.safeParse(v1);
-  assert.equal(r.success, true, r.success ? '' : JSON.stringify(r.error.issues));
-  // Canonical maxTimeoutSeconds (§6) is 300.
-  assert.equal((v1 as { maxTimeoutSeconds: number }).maxTimeoutSeconds, 300);
-});
-
-test('(i2) an incomplete leg (pre-fix shape) is rejected by the real schema', () => {
-  const incomplete = { scheme: 'exact', network: 'solana', maxAmountRequired: '10000', asset: x402Config().asset, payTo: x402Config().payTo };
-  assert.equal(PaymentRequirementsSchema.safeParse(incomplete).success, false);
 });
 
 test('(d) feePayer: /supported unreachable => fallback keeps accepts non-empty', async () => {

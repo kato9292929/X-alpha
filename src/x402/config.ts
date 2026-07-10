@@ -57,7 +57,7 @@ export function x402Config(): X402Config {
     facilitatorUrl: env('X402_FACILITATOR_URL', ''),
     feePayerTtlMs: Number(env('X402_FEE_PAYER_TTL_MS', '300000')),
     maxTimeoutSeconds: Number(env('X402_MAX_TIMEOUT_SECONDS', '300')),
-    description: env('X402_DESCRIPTION', 'X-alpha scorable alpha claims: cross-KOL, posted_at-aligned, author-weighted (structured, no original text)'),
+    description: env('X402_DESCRIPTION', 'X-alpha active scorable claims with author track record'),
     mimeType: env('X402_MIME_TYPE', 'application/json'),
   };
 }
