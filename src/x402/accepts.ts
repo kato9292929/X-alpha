@@ -22,6 +22,14 @@ import type { X402Config } from './config.js';
 interface LegBase {
   scheme: 'exact';
   network: string;
+  // These four are REQUIRED by the canonical exact-scheme PaymentRequirements
+  // schema (x402@1.2.0, verified: resource/description/mimeType/maxTimeoutSeconds
+  // are non-optional). Omitting them made verify fail with
+  // invalid_payment_requirements on the first live attempt.
+  resource: string;
+  description: string;
+  mimeType: string;
+  maxTimeoutSeconds: number;
   asset: string;
   payTo: string;
   extra: { resource: string; feePayer: string };
@@ -38,7 +46,17 @@ export interface Requirements {
 }
 
 function legBase(cfg: X402Config, network: string, resource: string, feePayer: string): LegBase {
-  return { scheme: cfg.scheme, network, asset: cfg.asset, payTo: cfg.payTo, extra: { resource, feePayer } };
+  return {
+    scheme: cfg.scheme,
+    network,
+    resource,
+    description: cfg.description,
+    mimeType: cfg.mimeType,
+    maxTimeoutSeconds: cfg.maxTimeoutSeconds,
+    asset: cfg.asset,
+    payTo: cfg.payTo,
+    extra: { resource, feePayer },
+  };
 }
 
 /**

@@ -32,7 +32,12 @@ export interface X402Config {
   facilitatorUrl: string;
   /** How long a fetched feePayer is cached (ms). */
   feePayerTtlMs: number;
+  /** Canonical value (§6): 300. Facilitator settle-window; on every accepts leg. */
   maxTimeoutSeconds: number;
+  /** Human description on each accepts leg (required by the canonical schema). */
+  description: string;
+  /** MIME type of the paid payload (required by the canonical schema). */
+  mimeType: string;
 }
 
 function env(name: string, fallback: string): string {
@@ -51,6 +56,8 @@ export function x402Config(): X402Config {
     feePayerFallback: env('X402_FEE_PAYER', ''),
     facilitatorUrl: env('X402_FACILITATOR_URL', ''),
     feePayerTtlMs: Number(env('X402_FEE_PAYER_TTL_MS', '300000')),
-    maxTimeoutSeconds: Number(env('X402_MAX_TIMEOUT_SECONDS', '60')),
+    maxTimeoutSeconds: Number(env('X402_MAX_TIMEOUT_SECONDS', '300')),
+    description: env('X402_DESCRIPTION', 'X-alpha scorable alpha claims: cross-KOL, posted_at-aligned, author-weighted (structured, no original text)'),
+    mimeType: env('X402_MIME_TYPE', 'application/json'),
   };
 }
